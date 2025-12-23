@@ -13,6 +13,8 @@ else:
 
 st.title("AI Nutrition Helper")
 
+provider = st.selectbox("Data provider", options=["OpenAI (chat)", "OpenFoodFacts (free)"], index=1)
+
 food = st.text_input("What did you eat?")
 
 food_db = {
@@ -74,14 +76,46 @@ if st.button("Get nutrition"):
                 else:
                     st.error(f"OpenAI error: {e}")
         else:
-            # Offline fallback using local food_db
-            key = food.strip().lower()
-            if key in food_db:
-                info = food_db[key]
-                st.success(f"{food.title()}: {info['calories']} kcal, {info['protein']} g protein")
+            # Provider selection: OpenFoodFacts or local DB fallback
+            if provider == "OpenFoodFacts (free)":
+                from providers.openfoodfacts import search_openfoodfacts
 
-                with open("food_history.txt", "a") as f:
-                    time = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    f.write(f"{time} - {food} (local)\n")
+                info = search_openfoodfacts(food)
+                if info:
+                    cal = info.get('calories')
+                    prot = info.get('protein')
+                    note = info.get('note') or ''
+                    parts = []
+                    if cal is not None:
+                        parts.append(f"{cal} kcal")
+                    if prot is not None:
+                        parts.append(f"{prot} g protein")
+                    st.success(f"{food.title()}: {', '.join(parts)} ({note})")
+
+                    with open("food_history.txt", "a") as f:
+                        time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        f.write(f"{time} - {food} (openfoodfacts)\n")
+                else:
+                    # fallback to local DB
+                    key = food.strip().lower()
+                    if key in food_db:
+                        info = food_db[key]
+                        st.success(f"{food.title()}: {info['calories']} kcal, {info['protein']} g protein")
+
+                        with open("food_history.txt", "a") as f:
+                            time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            f.write(f"{time} - {food} (local)\n")
+                    else:
+                        st.info("No data available from OpenFoodFacts or local DB. Try a different item or use OpenAI for broader coverage.")
             else:
-                st.info("No data in local DB for that food. Consider adding an OPENAI_API_KEY for broader coverage.")
+                # Local DB fallback
+                key = food.strip().lower()
+                if key in food_db:
+                    info = food_db[key]
+                    st.success(f"{food.title()}: {info['calories']} kcal, {info['protein']} g protein")
+
+                    with open("food_history.txt", "a") as f:
+                        time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        f.write(f"{time} - {food} (local)\n")
+                else:
+                    st.info("No data in local DB for that food. Consider adding an OPENAI_API_KEY for broader coverage.")
